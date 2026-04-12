@@ -122,11 +122,9 @@ pip install -r requirements.txt
 <p>Create a <b>.env</b> file:</p>
 
 <pre>
-OPENAI_API_KEY=your_key
-TAVILY_API_KEY=your_key
-SUPABASE_URL=your_url
-SUPABASE_KEY=your_key
-GEMINI_API_KEY=your_key
+DATABASE_URL=your_url
+GOOGLE_CLIENT_SECRET=your_key
+GOOGLE_CLIENT_ID= your_ID 
 </pre>
 
 <h3>5. Run the app</h3>

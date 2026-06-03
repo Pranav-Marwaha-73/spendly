@@ -22,8 +22,6 @@ def inject_user():
 
 @app.route("/")
 def landing():
-    if is_logged_in():
-        return redirect(url_for("profile"))
     return render_template("landing.html")
 
 
@@ -108,14 +106,14 @@ def profile():
 
     # Hardcoded data (will be replaced with DB queries in Step 5)
     user = {
-        "name": "Aman",
+        "name": "Demo User",
         "email": "demo@spendly.com",
-        "created_at": "Sep 2023",
-        "initials": "AM"
+        "created_at": "January 2026",
+        "initials": "DU"
     }
 
     stats = {
-        "total_spent": 12450,
+        "total_spent": 1234.56,
         "transaction_count": 24,
         "top_category": "Food"
     }

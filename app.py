@@ -1,7 +1,7 @@
 import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import check_password_hash
-from database.db import get_db, init_db, seed_db, create_user, get_user_by_email
+from database.db import get_db, init_db, seed_db, create_user, get_user_by_email, get_user_expenses, get_user_stats, get_category_breakdown
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key-for-spendly"
@@ -98,41 +98,50 @@ def logout():
     return redirect(url_for("landing"))
 
 
+def format_date_for_display(date_str):
+    """Convert YYYY-MM-DD to 'MMM DD, YYYY' format (e.g., 'May 15, 2026')"""
+    from datetime import datetime
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    return dt.strftime("%b %d, %Y")
+
+
 @app.route("/profile")
 def profile():
     # Redirect to login if not authenticated
     if not is_logged_in():
         return redirect(url_for("login"))
 
-    # Hardcoded data (will be replaced with DB queries in Step 5)
+    user_id = session.get("user_id")
+
+    # Get user info from database
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, email, created_at FROM users WHERE id = ?", (user_id,))
+    user_row = cursor.fetchone()
+    conn.close()
+
     user = {
-        "name": "Demo User",
-        "email": "demo@spendly.com",
+        "name": user_row["name"],
+        "email": user_row["email"],
         "created_at": "January 2026",
-        "initials": "DU"
+        "initials": "".join([n[0] for n in user_row["name"].split()])
     }
 
-    stats = {
-        "total_spent": 1234.56,
-        "transaction_count": 24,
-        "top_category": "Food"
-    }
+    stats = get_user_stats(user_id)
 
+    # Get transactions from database
+    raw_transactions = get_user_expenses(user_id)
     transactions = [
-        {"date": "May 15, 2026", "description": "Grocery shopping", "category": "Food", "amount": 45.50},
-        {"date": "May 12, 2026", "description": "Uber ride", "category": "Transport", "amount": 25.00},
-        {"date": "May 08, 2026", "description": "Electricity bill", "category": "Bills", "amount": 120.00},
-        {"date": "May 05, 2026", "description": "Doctor visit", "category": "Health", "amount": 80.00},
-        {"date": "May 02, 2026", "description": "Movie tickets", "category": "Entertainment", "amount": 35.00}
+        {
+            "date": format_date_for_display(t["date"]),
+            "description": t["description"],
+            "category": t["category"],
+            "amount": t["amount"]
+        }
+        for t in raw_transactions
     ]
 
-    categories = [
-        {"name": "Food", "amount": 450.00, "percentage": 36},
-        {"name": "Transport", "amount": 250.00, "percentage": 20},
-        {"name": "Bills", "amount": 200.00, "percentage": 16},
-        {"name": "Shopping", "amount": 150.00, "percentage": 12},
-        {"name": "Health", "amount": 100.00, "percentage": 8}
-    ]
+    categories = get_category_breakdown(user_id)
 
     return render_template("profile.html",
                          user=user,

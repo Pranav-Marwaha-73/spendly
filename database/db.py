@@ -95,3 +95,77 @@ def get_user_by_email(email):
     user = cursor.fetchone()
     conn.close()
     return user
+
+
+def get_user_expenses(user_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT date, description, category, amount FROM expenses WHERE user_id = ? ORDER BY date DESC",
+        (user_id,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_user_stats(user_id):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get total_spent and transaction_count
+    cursor.execute(
+        "SELECT COALESCE(SUM(amount), 0) AS total_spent, COUNT(*) AS transaction_count FROM expenses WHERE user_id = ?",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    total_spent = row["total_spent"] if row else 0
+    transaction_count = row["transaction_count"] if row else 0
+
+    # Get top_category (category with highest total amount)
+    cursor.execute(
+        "SELECT category FROM expenses WHERE user_id = ? GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
+        (user_id,)
+    )
+    top_category_row = cursor.fetchone()
+    top_category = top_category_row["category"] if top_category_row else None
+
+    conn.close()
+
+    return {
+        "total_spent": total_spent,
+        "transaction_count": transaction_count,
+        "top_category": top_category
+    }
+
+
+def get_category_breakdown(user_id):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get category totals and grand total
+    cursor.execute(
+        "SELECT category, SUM(amount) as total FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC",
+        (user_id,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        return []
+
+    # Calculate grand total
+    grand_total = sum(row["total"] for row in rows)
+
+    # Build result with percentages
+    breakdown = []
+    for row in rows:
+        category_total = row["total"]
+        percentage = round((category_total / grand_total) * 100)
+        breakdown.append({
+            "name": row["category"],
+            "amount": category_total,
+            "percentage": percentage
+        })
+
+    return breakdown

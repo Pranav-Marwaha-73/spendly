@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import check_password_hash
 from database.db import get_db, init_db, seed_db, create_user, get_user_by_email, get_user_expenses, get_user_stats, get_category_breakdown
@@ -127,10 +128,74 @@ def profile():
         "initials": "".join([n[0] for n in user_row["name"].split()])
     }
 
-    stats = get_user_stats(user_id)
+    # Parse and validate date filter parameters
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    active_filter = None
+
+    # Validate date_from
+    if date_from:
+        try:
+            datetime.strptime(date_from, "%Y-%m-%d")
+        except ValueError:
+            date_from = None
+
+    # Validate date_to
+    if date_to:
+        try:
+            datetime.strptime(date_to, "%Y-%m-%d")
+        except ValueError:
+            date_to = None
+
+    # Check if date_from > date_to
+    if date_from and date_to:
+        from_dt = datetime.strptime(date_from, "%Y-%m-%d").date()
+        to_dt = datetime.strptime(date_to, "%Y-%m-%d").date()
+        if from_dt > to_dt:
+            flash("Start date must be before end date.")
+            date_from = None
+            date_to = None
+
+    # Compute preset date ranges
+    today = date.today()
+    this_month_start = date(today.year, today.month, 1)
+    last_3_months_start = today.replace(day=1)
+    from datetime import timedelta
+    last_3_months_start = (today - timedelta(days=90))
+    last_6_months_start = (today - timedelta(days=180))
+
+    presets = {
+        "this_month": {
+            "date_from": this_month_start.isoformat(),
+            "date_to": today.isoformat(),
+            "label": "This Month"
+        },
+        "last_3_months": {
+            "date_from": last_3_months_start.isoformat(),
+            "date_to": today.isoformat(),
+            "label": "Last 3 Months"
+        },
+        "last_6_months": {
+            "date_from": last_6_months_start.isoformat(),
+            "date_to": today.isoformat(),
+            "label": "Last 6 Months"
+        }
+    }
+
+    # Determine active filter for highlighting
+    if date_from and date_to:
+        # Check if matches a preset
+        for key, preset in presets.items():
+            if preset["date_from"] == date_from and preset["date_to"] == date_to:
+                active_filter = key
+                break
+        if not active_filter:
+            active_filter = "custom"
+
+    stats = get_user_stats(user_id, date_from, date_to)
 
     # Get transactions from database
-    raw_transactions = get_user_expenses(user_id)
+    raw_transactions = get_user_expenses(user_id, date_from, date_to)
     transactions = [
         {
             "date": format_date_for_display(t["date"]),
@@ -141,13 +206,17 @@ def profile():
         for t in raw_transactions
     ]
 
-    categories = get_category_breakdown(user_id)
+    categories = get_category_breakdown(user_id, date_from, date_to)
 
     return render_template("profile.html",
                          user=user,
                          stats=stats,
                          transactions=transactions,
-                         categories=categories)
+                         categories=categories,
+                         date_from=date_from,
+                         date_to=date_to,
+                         active_filter=active_filter,
+                         presets=presets)
 
 
 @app.route("/expenses/add")

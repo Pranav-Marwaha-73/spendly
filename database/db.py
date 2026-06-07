@@ -97,26 +97,40 @@ def get_user_by_email(email):
     return user
 
 
-def get_user_expenses(user_id):
+def get_user_expenses(user_id, date_from=None, date_to=None):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT date, description, category, amount FROM expenses WHERE user_id = ? ORDER BY date DESC",
-        (user_id,)
-    )
+
+    query = "SELECT date, description, category, amount FROM expenses WHERE user_id = ?"
+    params = [user_id]
+
+    if date_from and date_to:
+        query += " AND date BETWEEN ? AND ?"
+        params.extend([date_from, date_to])
+
+    query += " ORDER BY date DESC"
+
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
 
-def get_user_stats(user_id):
+def get_user_stats(user_id, date_from=None, date_to=None):
     conn = get_db()
     cursor = conn.cursor()
 
+    base_where = "WHERE user_id = ?"
+    params = [user_id]
+
+    if date_from and date_to:
+        base_where += " AND date BETWEEN ? AND ?"
+        params.extend([date_from, date_to])
+
     # Get total_spent and transaction_count
     cursor.execute(
-        "SELECT COALESCE(SUM(amount), 0) AS total_spent, COUNT(*) AS transaction_count FROM expenses WHERE user_id = ?",
-        (user_id,)
+        f"SELECT COALESCE(SUM(amount), 0) AS total_spent, COUNT(*) AS transaction_count FROM expenses {base_where}",
+        params
     )
     row = cursor.fetchone()
     total_spent = row["total_spent"] if row else 0
@@ -124,8 +138,8 @@ def get_user_stats(user_id):
 
     # Get top_category (category with highest total amount)
     cursor.execute(
-        "SELECT category FROM expenses WHERE user_id = ? GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
-        (user_id,)
+        f"SELECT category FROM expenses {base_where} GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
+        params
     )
     top_category_row = cursor.fetchone()
     top_category = top_category_row["category"] if top_category_row else None
@@ -139,15 +153,21 @@ def get_user_stats(user_id):
     }
 
 
-def get_category_breakdown(user_id):
+def get_category_breakdown(user_id, date_from=None, date_to=None):
     conn = get_db()
     cursor = conn.cursor()
 
+    query = "SELECT category, SUM(amount) as total FROM expenses WHERE user_id = ?"
+    params = [user_id]
+
+    if date_from and date_to:
+        query += " AND date BETWEEN ? AND ?"
+        params.extend([date_from, date_to])
+
+    query += " GROUP BY category ORDER BY total DESC"
+
     # Get category totals and grand total
-    cursor.execute(
-        "SELECT category, SUM(amount) as total FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC",
-        (user_id,)
-    )
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
 

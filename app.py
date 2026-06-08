@@ -2,7 +2,7 @@ import sqlite3
 from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import check_password_hash
-from database.db import get_db, init_db, seed_db, create_user, get_user_by_email, get_user_expenses, get_user_stats, get_category_breakdown
+from database.db import get_db, init_db, seed_db, create_user, get_user_by_email, get_user_expenses, get_user_stats, get_category_breakdown, create_expense
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key-for-spendly"
@@ -97,6 +97,15 @@ def privacy():
 def logout():
     session.clear()
     return redirect(url_for("landing"))
+
+
+@app.route("/analytics")
+def analytics():
+    # Redirect to login if not authenticated
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    return render_template("analytics.html", active_page="analytics")
 
 
 def format_date_for_display(date_str):
@@ -216,12 +225,66 @@ def profile():
                          date_from=date_from,
                          date_to=date_to,
                          active_filter=active_filter,
-                         presets=presets)
+                         presets=presets,
+                         active_page="profile")
 
 
-@app.route("/expenses/add")
+@app.route("/expenses/add", methods=["GET", "POST"])
 def add_expense():
-    return "Add expense — coming in Step 7"
+    # Redirect to login if not authenticated
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        amount = request.form.get("amount", "").strip()
+        category = request.form.get("category", "").strip()
+        expense_date = request.form.get("date", "").strip()
+        description = request.form.get("description", "").strip()
+
+        # Validation
+        errors = []
+        if not amount:
+            errors.append("Amount is required")
+        else:
+            try:
+                amount = float(amount)
+                if amount <= 0:
+                    errors.append("Amount must be positive")
+            except ValueError:
+                errors.append("Amount must be a valid number")
+
+        if not category:
+            errors.append("Category is required")
+
+        if not expense_date:
+            errors.append("Date is required")
+        else:
+            try:
+                datetime.strptime(expense_date, "%Y-%m-%d")
+            except ValueError:
+                errors.append("Invalid date format")
+
+        if errors:
+            return render_template("add_expense.html",
+                                 error=". ".join(errors),
+                                 amount=amount,
+                                 category=category,
+                                 date=expense_date,
+                                 description=description,
+                                 active_page="add_expense")
+
+        # Save expense
+        user_id = session.get("user_id")
+        create_expense(user_id, amount, category, expense_date, description or None)
+
+        flash("Expense added successfully!")
+        return redirect(url_for("profile"))
+
+    # GET request - render form with today's date
+    today = date.today().isoformat()
+    return render_template("add_expense.html",
+                         date=today,
+                         active_page="add_expense")
 
 
 @app.route("/expenses/<int:id>/edit")

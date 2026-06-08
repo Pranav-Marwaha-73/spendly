@@ -99,6 +99,15 @@ def logout():
     return redirect(url_for("landing"))
 
 
+@app.route("/analytics")
+def analytics():
+    # Redirect to login if not authenticated
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    return render_template("analytics.html", active_page="analytics")
+
+
 def format_date_for_display(date_str):
     """Convert YYYY-MM-DD to 'MMM DD, YYYY' format (e.g., 'May 15, 2026')"""
     from datetime import datetime
@@ -216,7 +225,8 @@ def profile():
                          date_from=date_from,
                          date_to=date_to,
                          active_filter=active_filter,
-                         presets=presets)
+                         presets=presets,
+                         active_page="profile")
 
 
 @app.route("/expenses/add")

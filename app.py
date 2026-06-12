@@ -1,8 +1,8 @@
 import sqlite3
 from datetime import datetime, date
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from werkzeug.security import check_password_hash
-from database.db import get_db, init_db, seed_db, create_user, get_user_by_email, get_user_expenses, get_user_stats, get_category_breakdown, create_expense
+from database.db import get_db, init_db, seed_db, create_user, get_user_by_email, get_user_expenses, get_user_stats, get_category_breakdown, create_expense, get_expense_by_id, update_expense
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key-for-spendly"
@@ -207,6 +207,7 @@ def profile():
     raw_transactions = get_user_expenses(user_id, date_from, date_to)
     transactions = [
         {
+            "id": t["id"],
             "date": format_date_for_display(t["date"]),
             "description": t["description"],
             "category": t["category"],
@@ -287,9 +288,82 @@ def add_expense():
                          active_page="add_expense")
 
 
-@app.route("/expenses/<int:id>/edit")
+@app.route("/expenses/<int:id>/edit", methods=["GET", "POST"])
 def edit_expense(id):
-    return "Edit expense — coming in Step 8"
+    # Redirect to login if not authenticated
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    user_id = session.get("user_id")
+
+    if request.method == "POST":
+        amount = request.form.get("amount", "").strip()
+        category = request.form.get("category", "").strip()
+        expense_date = request.form.get("date", "").strip()
+        description = request.form.get("description", "").strip()
+
+        # Validation (same as add_expense)
+        errors = []
+        if not amount:
+            errors.append("Amount is required")
+        else:
+            try:
+                amount = float(amount)
+                if amount <= 0:
+                    errors.append("Amount must be positive")
+            except ValueError:
+                errors.append("Amount must be a valid number")
+
+        if not category:
+            errors.append("Category is required")
+        elif category not in ["Food", "Transport", "Bills", "Health", "Entertainment", "Shopping", "Other"]:
+            errors.append("Invalid category")
+
+        if not expense_date:
+            errors.append("Date is required")
+        else:
+            try:
+                datetime.strptime(expense_date, "%Y-%m-%d")
+            except ValueError:
+                errors.append("Invalid date format")
+
+        if errors:
+            # Re-render form with errors and submitted values
+            expense = {
+                "id": id,
+                "amount": amount,
+                "category": category,
+                "date": expense_date,
+                "description": description
+            }
+            categories = ["Food", "Transport", "Bills", "Health", "Entertainment", "Shopping", "Other"]
+            return render_template("edit_expense.html",
+                                 expense=expense,
+                                 error=". ".join(errors),
+                                 categories=categories,
+                                 active_page="profile")
+
+        # Update expense
+        rows = update_expense(id, user_id, amount, category, expense_date, description or None)
+
+        if rows > 0:
+            flash("Expense updated successfully!")
+            return redirect(url_for("profile"))
+        else:
+            abort(404)
+
+    # GET request - fetch expense for pre-populating form
+    expense = get_expense_by_id(id, user_id)
+
+    if expense is None:
+        abort(404)
+
+    categories = ["Food", "Transport", "Bills", "Health", "Entertainment", "Shopping", "Other"]
+
+    return render_template("edit_expense.html",
+                         expense=expense,
+                         categories=categories,
+                         active_page="profile")
 
 
 @app.route("/expenses/<int:id>/delete")

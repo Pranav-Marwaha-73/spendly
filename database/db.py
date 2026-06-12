@@ -101,7 +101,7 @@ def get_user_expenses(user_id, date_from=None, date_to=None):
     conn = get_db()
     cursor = conn.cursor()
 
-    query = "SELECT date, description, category, amount FROM expenses WHERE user_id = ?"
+    query = "SELECT id, date, description, category, amount FROM expenses WHERE user_id = ?"
     params = [user_id]
 
     if date_from and date_to:
@@ -202,3 +202,30 @@ def create_expense(user_id, amount, category, date, description=None):
     expense_id = cursor.lastrowid
     conn.close()
     return expense_id
+
+
+def get_expense_by_id(expense_id, user_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, user_id, amount, category, date, description FROM expenses WHERE id = ? AND user_id = ?",
+        (expense_id, user_id)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
+
+
+def update_expense(expense_id, user_id, amount, category, date, description=None):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE expenses SET amount = ?, category = ?, date = ?, description = ? WHERE id = ? AND user_id = ?",
+        (amount, category, date, description, expense_id, user_id)
+    )
+    conn.commit()
+    rows_affected = cursor.rowcount
+    conn.close()
+    return rows_affected

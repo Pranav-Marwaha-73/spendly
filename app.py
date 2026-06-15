@@ -2,7 +2,7 @@ import sqlite3
 from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from werkzeug.security import check_password_hash
-from database.db import get_db, init_db, seed_db, create_user, get_user_by_email, get_user_expenses, get_user_stats, get_category_breakdown, create_expense, get_expense_by_id, update_expense
+from database.db import get_db, init_db, seed_db, create_user, get_user_by_email, get_user_expenses, get_user_stats, get_category_breakdown, create_expense, get_expense_by_id, update_expense, delete_expense
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key-for-spendly"
@@ -366,9 +366,22 @@ def edit_expense(id):
                          active_page="profile")
 
 
-@app.route("/expenses/<int:id>/delete")
-def delete_expense(id):
-    return "Delete expense — coming in Step 9"
+@app.route("/expenses/<int:id>/delete", methods=["POST"], endpoint="delete_expense")
+def handle_delete_expense(id):
+    # Guard: redirect to login if not authenticated
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    # Verify ownership - if None, expense doesn't exist or belongs to another user
+    expense = get_expense_by_id(id, session["user_id"])
+    if expense is None:
+        abort(404)
+
+    # Delete the expense
+    delete_expense(id, session["user_id"])
+
+    # Redirect to profile
+    return redirect(url_for("profile"))
 
 
 if __name__ == "__main__":
